@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>부엉이를 피해라!!!</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    canvas {
+      display: block;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+    }
+  </style>
+</head>
+<body class="bg-amber-100 h-screen w-screen flex flex-col items-center justify-center overflow-hidden p-2 sm:p-4">
+
+  <!-- 메인 게임 컨테이너 -->
+  <div class="relative w-full max-w-2xl bg-amber-200 rounded-3xl p-4 shadow-2xl border-4 border-amber-600 flex flex-col items-center">
+    
+    <!-- 상단 헤더 / 정보 표시줄 -->
+    <div class="w-full flex justify-between items-center mb-3 px-2">
+      <div class="flex items-center space-x-2">
+        <span class="text-3xl">🦉</span>
+        <h1 class="text-xl sm:text-2xl font-black text-amber-950 tracking-wide">부엉이를 피해라!!!</h1>
+      </div>
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- 일시정지 버튼 (클릭 및 P키 가능) -->
+        <button id="pauseBtn" class="bg-amber-400 hover:bg-amber-500 active:scale-95 border-2 border-amber-700 rounded-2xl px-3 py-1.5 font-bold text-amber-950 flex items-center space-x-1 shadow-md transition-all">
+          <span id="pauseIcon" class="text-lg">⏸️</span>
+          <span id="pauseText" class="text-xs font-black hidden sm:inline">일시정지 (P)</span>
+        </button>
+
+        <!-- 음소거 토글 버튼 -->
+        <button id="soundToggleBtn" class="bg-amber-400 hover:bg-amber-500 active:scale-95 border-2 border-amber-700 rounded-2xl px-3 py-1.5 font-bold text-amber-950 flex items-center space-x-1 shadow-md transition-all">
+          <span id="soundIcon" class="text-lg">🔊</span>
+          <span id="soundText" class="text-xs font-black hidden sm:inline">소리 켜짐</span>
+        </button>
+
+        <!-- 레벨 표시 -->
+        <div class="bg-amber-400 px-3 py-1.5 rounded-2xl border-2 border-amber-700 shadow-md flex flex-col items-center">
+          <span class="text-[10px] text-amber-950 font-bold block leading-none mb-0.5">STAGE</span>
+          <span id="levelText" class="text-lg font-black text-amber-950 leading-none">Lv.1</span>
+        </div>
+
+        <div class="bg-amber-400 px-4 py-1.5 rounded-2xl border-2 border-amber-700 shadow-md">
+          <span class="text-xs text-amber-950 font-bold block">목표 점수</span>
+          <span class="text-xl font-black text-amber-950">100 / <span id="currentScore" class="text-amber-950">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Canvas 영역 -->
+    <div class="relative w-full aspect-[4/3] max-h-[60vh] rounded-2xl overflow-hidden border-4 border-amber-600 shadow-inner">
+      <canvas id="gameCanvas" class="w-full h-full bg-amber-400"></canvas>
+
+      <!-- 시작 화면 오버레이 -->
+      <div id="startOverlay" class="absolute inset-0 bg-amber-500/95 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6 text-center z-10 transition-opacity duration-300 overflow-y-auto">
+        <div class="text-5xl sm:text-6xl mb-2 animate-bounce">🎮🦉</div>
+        <h2 class="text-2xl sm:text-3xl font-black text-amber-950 mb-1">부엉이를 피해라!!!</h2>
+        
+        <!-- 최고 기록 표시 -->
+        <div class="bg-amber-300/90 border-2 border-amber-700 rounded-2xl px-4 py-1 my-1 shadow-md flex items-center space-x-2">
+          <span class="text-lg sm:text-xl">🏆</span>
+          <span class="text-xs sm:text-sm font-bold text-amber-950">최고 기록: <span id="highScoreStartText" class="text-base sm:text-lg font-black text-amber-900">0</span>점</span>
+        </div>
+
+        <!-- 에셋 출처 표기 -->
+        <div class="text-[11px] text-amber-900/80 font-bold -mt-0.5 mb-1">
+          Assets by Kenney
+        </div>
+
+        <p class="text-amber-950 font-medium mb-3 max-w-sm text-xs leading-relaxed">
+        <b>바위(🪨)</b> +5점 | <b>비둘기(🕊️, 10%)</b> +10점 | <b>별(⭐)</b> 무적 + 적 격퇴 +1점<br>
+        <span class="text-amber-900 font-bold">아이템이 중첩 생성됩니다! 단계 선택 후 시작하세요.</span>
+      </p>
+
+        <!-- 단계(Stage 1 ~ 7) 선택 영역 -->
+        <div class="w-full max-w-md bg-amber-400/80 p-2.5 rounded-2xl border-2 border-amber-700 mb-3 shadow-inner">
+          <div class="text-xs font-black text-amber-950 mb-1.5">시작 단계 선택 (Stage 1 ~ 7)</div>
+          <div id="stageSelectContainer" class="grid grid-cols-4 sm:grid-cols-7 gap-1.5 justify-center">
+            <button data-stage="1" class="stage-btn bg-amber-600 text-white font-black py-1.5 px-1 text-xs rounded-xl border-2 border-amber-800 shadow transition-all active:scale-95">1단계</button>
+            <button data-stage="2" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">2단계</button>
+            <button data-stage="3" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">3단계</button>
+            <button data-stage="4" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">4단계</button>
+            <button data-stage="5" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">5단계</button>
+            <button data-stage="6" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">6단계</button>
+            <button data-stage="7" class="stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95">7단계</button>
+          </div>
+        </div>
+
+        <button id="startBtn" class="bg-amber-600 hover:bg-amber-700 active:scale-95 text-white text-lg sm:text-xl font-black py-2.5 px-9 rounded-full shadow-2xl transition-all duration-200 border-4 border-amber-300">
+          1단계 시작
+        </button>
+      </div>
+
+      <!-- 일시정지 오버레이 -->
+      <div id="pauseOverlay" class="absolute inset-0 bg-amber-950/70 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10 hidden">
+        <div class="text-6xl mb-2">⏸️</div>
+        <h2 class="text-3xl font-black text-white mb-2">일시 정지</h2>
+        <p class="text-amber-200 mb-4 text-sm font-semibold">키보드 [P] 키를 누르거나 아래 버튼을 눌러 재개하세요.</p>
+        <button id="resumeBtn" class="bg-amber-400 hover:bg-amber-500 active:scale-95 text-amber-950 text-xl font-black py-3 px-8 rounded-full shadow-xl transition-all duration-200 border-4 border-amber-700">
+          게임 계속하기
+        </button>
+      </div>
+
+      <!-- 게임 오버 오버레이 -->
+      <div id="gameOverOverlay" class="absolute inset-0 bg-amber-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10 hidden">
+        <div class="text-6xl mb-2">💥🦉</div>
+        <h2 class="text-3xl font-black text-white mb-1">게임 오버!</h2>
+        <p class="text-amber-200 mb-2 text-sm font-semibold">적에게 붙잡혔습니다!</p>
+        
+        <div class="bg-amber-900/80 rounded-2xl p-3 my-2 w-52 border-2 border-amber-400 shadow-lg flex flex-col items-center space-y-1">
+          <div class="text-xs text-amber-200 font-bold">최종 점수: <span id="finalScore" class="text-2xl font-black text-yellow-300">0</span></div>
+          <div class="text-xs text-amber-300 font-bold">최고 기록: <span id="highScoreGameOverText" class="text-xl font-black text-white">0</span></div>
+        </div>
+
+        <p class="text-amber-300 text-xs mb-2">키보드 [R] 키를 눌러 시작 화면으로 이동</p>
+
+        <button id="restartBtn" class="bg-yellow-400 hover:bg-yellow-500 active:scale-95 text-amber-950 text-lg font-black py-2.5 px-8 rounded-full shadow-xl transition-all duration-200 border-4 border-amber-600">
+          시작 화면으로 [R]
+        </button>
+      </div>
+
+      <!-- 승리 오버레이 -->
+      <div id="winOverlay" class="absolute inset-0 bg-amber-500/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-10 hidden">
+        <div class="text-6xl mb-2 animate-bounce">🎉🏆</div>
+        <h2 class="text-3xl font-black text-white mb-1">축하합니다! ALL CLEAR!</h2>
+        <p class="text-amber-950 font-bold mb-3 text-sm sm:text-base">100점을 달성하여 클리어하셨습니다!</p>
+
+        <div class="bg-amber-700/80 rounded-2xl p-3 mb-3 w-52 border-2 border-amber-300 text-white flex flex-col items-center">
+          <div class="text-xs font-bold text-amber-200">최고 기록 달성!</div>
+          <div id="highScoreWinText" class="text-2xl font-black text-yellow-300">100</div>
+        </div>
+        
+        <p class="text-amber-950 text-xs font-bold mb-2">키보드 [R] 키를 눌러 시작 화면으로 이동</p>
+
+        <button id="winRestartBtn" class="bg-white hover:bg-amber-100 active:scale-95 text-amber-950 text-lg font-black py-2.5 px-8 rounded-full shadow-xl transition-all duration-200 border-4 border-amber-400">
+          시작 화면으로 [R]
+        </button>
+      </div>
+    </div>
+
+    <!-- 모바일 전용 터치 컨트롤러 (데스크톱에서는 hidden, 터치 디바이스/모바일 화면에서만 표시) -->
+    <div id="mobileTouchControls" class="w-full mt-4 flex justify-between items-center px-6 select-none touch-none pointer-events-auto hidden sm:hidden">
+      <!-- 왼쪽 이동 버튼 -->
+      <button id="touchLeftBtn" class="w-[70px] h-[70px] opacity-60 hover:opacity-80 active:opacity-100 transition-opacity active:scale-95 focus:outline-none flex items-center justify-center rounded-full bg-black/10 backdrop-blur-sm p-0">
+        <img src="images/btn_lfte.png" alt="왼쪽" class="w-full h-full object-contain pointer-events-none" onerror="this.parentElement.innerHTML='◀'">
+      </button>
+
+      <!-- 보조 조작 버튼 (일시정지) -->
+      <div class="flex items-center space-x-2">
+        <button id="mobilePauseBtn" class="bg-amber-500/80 active:bg-amber-700 text-white font-black py-2 px-3 rounded-xl border border-amber-800 shadow-md text-xs active:scale-95 transition-all">
+          ⏸️ 일시정지
+        </button>
+      </div>
+
+      <!-- 오른쪽 이동 버튼 -->
+      <button id="touchRightBtn" class="w-[70px] h-[70px] opacity-60 hover:opacity-80 active:opacity-100 transition-opacity active:scale-95 focus:outline-none flex items-center justify-center rounded-full bg-black/10 backdrop-blur-sm p-0">
+        <img src="images/btn_right.png" alt="오른쪽" class="w-full h-full object-contain pointer-events-none" onerror="this.parentElement.innerHTML='▶'">
+      </button>
+    </div>
+
+    <!-- 조작 가이드 -->
+    <div class="w-full mt-3 flex flex-col sm:flex-row items-center justify-between text-xs font-extrabold text-amber-950 gap-2 px-2">
+      <div class="flex items-center space-x-2">
+        <span class="bg-amber-300 px-2 py-1 rounded-md border border-amber-600 font-mono">방향키 / 터치</span>
+        <span>이동</span>
+        <span class="bg-amber-300 px-2 py-1 rounded-md border border-amber-600 font-mono">P</span>
+        <span>일시정지</span>
+        <span class="bg-amber-300 px-2 py-1 rounded-md border border-amber-600 font-mono">R</span>
+        <span>리셋</span>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-1.5">
+        <span class="bg-amber-300 px-2 py-0.5 rounded-md border border-amber-600">🪨 +5점</span>
+        <span class="bg-amber-300 px-2 py-0.5 rounded-md border border-amber-600">🕊️ +10점(10%)</span>
+        <span class="bg-amber-300 px-2 py-0.5 rounded-md border border-amber-600">⭐ 무적 +1점</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Game States Constant
+    const GameState = {
+      START: 'START',
+      PLAY: 'PLAY',
+      PAUSE: 'PAUSE',
+      GAMEOVER: 'GAMEOVER',
+      CLEAR: 'CLEAR'
+    };
+
+    let currentState = GameState.START;
+
+    // LocalStorage Key for High Score
+    const HIGH_SCORE_KEY = 'avoid_owl_high_score';
+    let highScore = parseInt(localStorage.getItem(HIGH_SCORE_KEY) || '0', 10);
+
+    // 7 Stage Background Colors & Themes
+    const stageBackgrounds = [
+      { start: '#fde047', end: '#eab308' }, // Stage 1: 맑은 노란색
+      { start: '#fb923c', end: '#ea580c' }, // Stage 2: 따뜻한 주황색 (노을)
+      { start: '#f43f5e', end: '#be123c' }, // Stage 3: 강렬한 붉은색
+      { start: '#a855f7', end: '#6b21a8' }, // Stage 4: 신비로운 보라색
+      { start: '#3b82f6', end: '#1e3a8a' }, // Stage 5: 깊은 푸른 밤
+      { start: '#10b981', end: '#064e3b' }, // Stage 6: 에메랄드 오로라
+      { start: '#334155', end: '#0f172a' }  // Stage 7: 딥 다크 스페이스
+    ];
+
+    // Asset Loader
+    const images = {
+      player: { src: 'images/player.png', img: new Image(), loaded: false, width: 60, height: 60 },
+      enemy: { src: 'images/enemy.png', img: new Image(), loaded: false, width: 50, height: 50 },
+      background: { src: 'images/background.png', img: new Image(), loaded: false, pattern: null }
+    };
+
+    // Sound Manager
+    let isMuted = false;
+    const soundToggleBtn = document.getElementById('soundToggleBtn');
+    const soundIcon = document.getElementById('soundIcon');
+    const soundText = document.getElementById('soundText');
+
+    const sounds = {
+      start: new Audio('sounds/cool-impact.mp3'),
+      item: new Audio('sounds/fast-whoosh.mp3'),
+      enemy: new Audio('sounds/dog barking.mp3'),
+      gameOver: new Audio('sounds/aggressive-beast.mp3')
+    };
+
+    Object.keys(sounds).forEach(key => {
+      sounds[key].preload = 'auto';
+      sounds[key].onerror = () => {
+        console.warn(`[Audio Warning] Failed to load audio: sounds/${key}`);
+      };
+    });
+
+    function playSFX(key) {
+      if (isMuted) return;
+      try {
+        const original = sounds[key];
+        if (!original) return;
+        
+        const soundClone = original.cloneNode();
+        soundClone.volume = 0.8;
+        const playPromise = soundClone.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.warn(`[Audio Playback Inhibited]: ${err.message}`);
+          });
+        }
+      } catch (e) {}
+    }
+
+    soundToggleBtn.addEventListener('click', () => {
+      isMuted = !isMuted;
+      if (isMuted) {
+        soundIcon.textContent = '🔇';
+        if (soundText) soundText.textContent = '소리 꺼짐';
+        soundToggleBtn.classList.replace('bg-amber-400', 'bg-amber-300');
+      } else {
+        soundIcon.textContent = '🔊';
+        if (soundText) soundText.textContent = '소리 켜짐';
+        soundToggleBtn.classList.replace('bg-amber-300', 'bg-amber-400');
+      }
+    });
+
+    // Load Image Assets with Fallback
+    Object.keys(images).forEach(key => {
+      const item = images[key];
+      item.img.src = item.src;
+      item.img.onload = () => {
+        item.loaded = true;
+        if (key === 'background') {
+          const tempCanvas = document.createElement('canvas');
+          const tempCtx = tempCanvas.getContext('2d');
+          item.pattern = tempCtx.createPattern(item.img, 'repeat');
+        }
+      };
+      item.img.onerror = () => {
+        item.loaded = false;
+        console.warn(`[Asset Warning] Failed to load ${item.src}. Fallback drawing will be used.`);
+      };
+    });
+
+    // Canvas setup
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // UI Elements
+    const startOverlay = document.getElementById('startOverlay');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const winOverlay = document.getElementById('winOverlay');
+    
+    const startBtn = document.getElementById('startBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const winRestartBtn = document.getElementById('winRestartBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const mobilePauseBtn = document.getElementById('mobilePauseBtn');
+    
+    const currentScoreEl = document.getElementById('currentScore');
+    const finalScoreEl = document.getElementById('finalScore');
+    const levelTextEl = document.getElementById('levelText');
+    const highScoreStartTextEl = document.getElementById('highScoreStartText');
+    const highScoreGameOverTextEl = document.getElementById('highScoreGameOverText');
+    const highScoreWinTextEl = document.getElementById('highScoreWinText');
+
+    // High Score Manager
+    function updateHighScoreDisplay() {
+      if (highScoreStartTextEl) highScoreStartTextEl.textContent = highScore;
+      if (highScoreGameOverTextEl) highScoreGameOverTextEl.textContent = highScore;
+      if (highScoreWinTextEl) highScoreWinTextEl.textContent = highScore;
+    }
+
+    function checkAndUpdateHighScore(newScore) {
+      if (newScore > highScore) {
+        highScore = newScore;
+        localStorage.setItem(HIGH_SCORE_KEY, highScore.toString());
+      }
+      updateHighScoreDisplay();
+    }
+
+    // Initialize High Score View
+    updateHighScoreDisplay();
+
+    // Game variables
+    let gameLoopId = null;
+    let score = 0;
+    let selectedStartStage = 1;
+    let currentLevel = 1;
+    const WIN_SCORE = 100;
+
+    let lastTime = 0;
+    let owlSpawnTimer = 0;
+    let starSpawnTimer = 0;
+
+    // Stage Selection Buttons Event
+    const stageBtns = document.querySelectorAll('.stage-btn');
+    stageBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        selectedStartStage = parseInt(e.target.dataset.stage, 10);
+        stageBtns.forEach(b => {
+          b.className = 'stage-btn bg-amber-300 text-amber-950 font-bold py-1.5 px-1 text-xs rounded-xl border-2 border-amber-700 shadow hover:bg-amber-400 transition-all active:scale-95';
+        });
+        e.target.className = 'stage-btn bg-amber-600 text-white font-black py-1.5 px-1 text-xs rounded-xl border-2 border-amber-800 shadow transition-all active:scale-95';
+        if (startBtn) {
+          startBtn.textContent = `${selectedStartStage}단계 시작`;
+        }
+      });
+    });
+
+    // Responsive Canvas Resizing & Mobile Touch Container Visibility
+    const mobileTouchControls = document.getElementById('mobileTouchControls');
+    
+    function checkTouchDevice() {
+      const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.matchMedia('(max-width: 640px)').matches;
+      if (mobileTouchControls) {
+        if (isTouch) {
+          mobileTouchControls.classList.remove('hidden');
+        } else {
+          mobileTouchControls.classList.add('hidden');
+        }
+      }
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      checkTouchDevice();
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // Key input tracking
+    const keys = {
+      ArrowUp: false,
+      ArrowDown: false,
+      ArrowLeft: false,
+      ArrowRight: false,
+      w: false, a: false, s: false, d: false
+    };
+
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+
+      // Pause toggle with 'P' key during PLAY or PAUSE state
+      if (key === 'p') {
+        if (currentState === GameState.PLAY) {
+          switchState(GameState.PAUSE);
+        } else if (currentState === GameState.PAUSE) {
+          switchState(GameState.PLAY);
+        }
+        return;
+      }
+
+      // Reset to START overlay with 'R' key from GAMEOVER or CLEAR state
+      if (key === 'r') {
+        if (currentState === GameState.GAMEOVER || currentState === GameState.CLEAR) {
+          switchState(GameState.START);
+        }
+        return;
+      }
+
+      if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(key)) {
+        keys[e.key] = true;
+        keys[key] = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(key)) {
+        keys[e.key] = false;
+        keys[key] = false;
+      }
+    });
+
+    // Touch Buttons Setup (70x70 Left / Right Image Buttons)
+    const touchLeftBtn = document.getElementById('touchLeftBtn');
+    const touchRightBtn = document.getElementById('touchRightBtn');
+
+    function bindTouchBtn(element, keyName) {
+      if (!element) return;
+
+      const handlePress = (e) => {
+        if (e.cancelable) e.preventDefault();
+        keys[keyName] = true;
+      };
+
+      const handleRelease = (e) => {
+        if (e.cancelable) e.preventDefault();
+        keys[keyName] = false;
+      };
+
+      element.addEventListener('touchstart', handlePress, { passive: false });
+      element.addEventListener('touchend', handleRelease, { passive: false });
+      element.addEventListener('touchcancel', handleRelease, { passive: false });
+      
+      element.addEventListener('mousedown', handlePress);
+      element.addEventListener('mouseup', handleRelease);
+      element.addEventListener('mouseleave', handleRelease);
+    }
+
+    bindTouchBtn(touchLeftBtn, 'ArrowLeft');
+    bindTouchBtn(touchRightBtn, 'ArrowRight');
+
+    // Player Class
+    class Player {
+      constructor() {
+        this.width = images.player.width;
+        this.height = images.player.height;
+        // Collision boundary (80% of image size -> radius = width * 0.4)
+        this.radius = this.width * 0.4;
+        this.x = canvas.width / 2;
+        this.y = canvas.height / 2;
+        this.speed = 5.2; // Smooth dodging adjustment
+        this.invincibleTimer = 0;
+      }
+
+      update(dt) {
+        if (this.invincibleTimer > 0) {
+          this.invincibleTimer -= dt;
+          if (this.invincibleTimer < 0) this.invincibleTimer = 0;
+        }
+
+        let dx = 0;
+        let dy = 0;
+
+        if (keys.ArrowUp || keys.w) dy -= 1;
+        if (keys.ArrowDown || keys.s) dy += 1;
+        if (keys.ArrowLeft || keys.a) dx -= 1;
+        if (keys.ArrowRight || keys.d) dx += 1;
+
+        if (dx !== 0 && dy !== 0) {
+          dx *= 0.7071;
+          dy *= 0.7071;
+        }
+
+        if (dx !== 0 || dy !== 0) {
+          this.x += dx * this.speed;
+          this.y += dy * this.speed;
+        }
+
+        // Screen boundary constraint
+        this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+        this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Invincibility Effect
+        if (this.invincibleTimer > 0) {
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius + 12, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(234, 179, 8, 0.4)';
+          ctx.fill();
+          ctx.strokeStyle = '#d97706';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
+
+        if (images.player.loaded) {
+          ctx.drawImage(
+            images.player.img,
+            -this.width / 2,
+            -this.height / 2,
+            this.width,
+            this.height
+          );
+        } else {
+          // Fallback Drawing (Koala fixed)
+          ctx.font = '36px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🐨', 0, 0);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // Owl / Enemy Class
+    class Owl {
+      constructor(x, y, speedMultiplier) {
+        this.x = x;
+        this.y = y;
+        this.width = images.enemy.width;
+        this.height = images.enemy.height;
+        // Collision boundary (80% of image size -> radius = width * 0.4)
+        this.radius = this.width * 0.4;
+        // Adjusted base speed for smoother progression
+        this.speed = (1.5 + Math.random() * 0.7) * speedMultiplier;
+        this.angle = 0;
+      }
+
+      update(player) {
+        const dx = player.x - this.x;
+        const dy = player.y - this.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 0) {
+          this.x += (dx / dist) * this.speed;
+          this.y += (dy / dist) * this.speed;
+        }
+
+        this.angle = Math.sin(Date.now() / 200 + this.x) * 0.15;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+
+        if (images.enemy.loaded) {
+          ctx.drawImage(
+            images.enemy.img,
+            -this.width / 2,
+            -this.height / 2,
+            this.width,
+            this.height
+          );
+        } else {
+          // Fallback Drawing
+          ctx.font = '24px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('🦉', 0, 0);
+        }
+
+        ctx.restore();
+      }
+    }
+
+    // Rock Item (+5 Score)
+    class Rock {
+      constructor() {
+        this.radius = 16;
+        this.x = Math.random() * (canvas.width - 60) + 30;
+        this.y = Math.random() * (canvas.height - 60) + 30;
+        this.emoji = '🪨';
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.font = '28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.emoji, 0, 0);
+        ctx.restore();
+      }
+    }
+
+    // Dove Item (+10 Score, 10% spawn rate)
+    class Dove {
+      constructor() {
+        this.radius = 18;
+        this.x = Math.random() * (canvas.width - 60) + 30;
+        this.y = Math.random() * (canvas.height - 60) + 30;
+        this.emoji = '🕊️';
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Gentle pulse effect
+        const scale = 1 + Math.sin(Date.now() / 150) * 0.12;
+        ctx.scale(scale, scale);
+
+        ctx.font = '30px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.emoji, 0, 0);
+        ctx.restore();
+      }
+    }
+
+    // Star Item (3 sec Invincibility)
+    class Star {
+      constructor() {
+        this.radius = 16;
+        this.x = Math.random() * (canvas.width - 60) + 30;
+        this.y = Math.random() * (canvas.height - 60) + 30;
+        this.emoji = '⭐';
+        this.lifespan = 9; // Slightly increased for better playability
+      }
+
+      update(dt) {
+        this.lifespan -= dt;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        const scale = 1 + Math.sin(Date.now() / 120) * 0.2;
+        ctx.scale(scale, scale);
+
+        ctx.font = '28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.emoji, 0, 0);
+        ctx.restore();
+      }
+    }
+
+    let player;
+    let owls = [];
+    let items = []; // 단일 currentItem 대신 여러 아이템을 관리하는 배열
+    let stars = [];
+    let itemSpawnTimer = 0; // 아이템 중첩 생성을 위한 타이머
+
+    // Helper: Spawn Item (10% chance for Dove)
+    function createRandomScoreItem() {
+      if (Math.random() < 0.10) {
+        return new Dove();
+      } else {
+        return new Rock();
+      }
+    }
+
+    // Spawn Owl
+    function spawnOwl() {
+      let x, y;
+      if (Math.random() < 0.5) {
+        x = Math.random() < 0.5 ? -30 : canvas.width + 30;
+        y = Math.random() * canvas.height;
+      } else {
+        x = Math.random() * canvas.width;
+        y = Math.random() < 0.5 ? -30 : canvas.height + 30;
+      }
+
+      // Smoother speed scaling per stage
+      const speedMult = 1 + (currentLevel - 1) * 0.15;
+      owls.push(new Owl(x, y, speedMult));
+    }
+
+    function initGame() {
+      currentLevel = selectedStartStage;
+      score = 0;
+      owlSpawnTimer = 0;
+      starSpawnTimer = 0;
+      itemSpawnTimer = 0;
+      owls = [];
+      items = [];
+      stars = [];
+
+      player = new Player();
+      
+      // 초기 시작 시 아이템 3개 기본 중첩 생성
+      for (let i = 0; i < 3; i++) {
+        items.push(createRandomScoreItem());
+      }
+
+      // Start with 1 owl at Stage 1-2, 2 owls at higher stages
+      spawnOwl();
+      if (currentLevel >= 3) {
+        spawnOwl();
+      }
+
+      if (levelTextEl) levelTextEl.textContent = `Lv.${currentLevel}`;
+      if (currentScoreEl) currentScoreEl.textContent = '0';
+    }
+
+    // Switch Game State Machine
+    function switchState(newState) {
+      currentState = newState;
+
+      startOverlay.classList.add('hidden');
+      pauseOverlay.classList.add('hidden');
+      gameOverOverlay.classList.add('hidden');
+      winOverlay.classList.add('hidden');
+
+      switch (currentState) {
+        case GameState.START:
+          startOverlay.classList.remove('hidden');
+          updateHighScoreDisplay();
+          break;
+
+        case GameState.PLAY:
+          if (!player) {
+            initGame();
+            playSFX('start');
+          }
+          lastTime = performance.now();
+          if (gameLoopId) cancelAnimationFrame(gameLoopId);
+          gameLoopId = requestAnimationFrame(gameLoop);
+          break;
+
+        case GameState.PAUSE:
+          pauseOverlay.classList.remove('hidden');
+          break;
+
+        case GameState.GAMEOVER:
+          playSFX('gameOver');
+          if (finalScoreEl) finalScoreEl.textContent = score;
+          checkAndUpdateHighScore(score);
+          gameOverOverlay.classList.remove('hidden');
+          player = null;
+          break;
+
+        case GameState.CLEAR:
+          checkAndUpdateHighScore(score);
+          winOverlay.classList.remove('hidden');
+          player = null;
+          break;
+      }
+    }
+
+    // Main Game Loop
+    function gameLoop(currentTime) {
+      if (currentState !== GameState.PLAY) return;
+
+      const dt = Math.min((currentTime - lastTime) / 1000, 0.1);
+      lastTime = currentTime;
+
+      // Update Level based on score (Level up every 50 points)
+      const calculatedLevel = Math.max(selectedStartStage, Math.min(7, Math.floor(score / 50) + selectedStartStage));
+      if (calculatedLevel !== currentLevel) {
+        currentLevel = calculatedLevel;
+        if (levelTextEl) levelTextEl.textContent = `Lv.${currentLevel}`;
+      }
+
+      // Smooth owl spawn interval adjustment based on current stage
+      owlSpawnTimer += dt;
+      const spawnInterval = Math.max(1.6, 3.5 - (currentLevel - 1) * 0.28);
+      if (owlSpawnTimer >= spawnInterval) {
+        spawnOwl();
+        owlSpawnTimer = 0;
+      }
+
+      // 중첩 아이템 지속 생성 (최대 5개까지 유지)
+      itemSpawnTimer += dt;
+      if (itemSpawnTimer >= 1.5) {
+        if (items.length < 5) {
+          items.push(createRandomScoreItem());
+        }
+        itemSpawnTimer = 0;
+      }
+
+      // Spawn Star items
+      starSpawnTimer += dt;
+      if (starSpawnTimer >= 7.5) {
+        if (stars.length < 2) {
+          stars.push(new Star());
+        }
+        starSpawnTimer = 0;
+      }
+
+      // Render Background
+      const theme = stageBackgrounds[currentLevel - 1] || stageBackgrounds[0];
+      if (images.background.loaded && images.background.pattern) {
+        ctx.fillStyle = images.background.pattern;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        bgGrad.addColorStop(0, theme.start);
+        bgGrad.addColorStop(1, theme.end);
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Update & Draw Player
+      player.update(dt);
+      player.draw();
+
+      // Update & Draw Items (Rock / Dove 배열 순회)
+      for (let i = items.length - 1; i >= 0; i--) {
+        const item = items[i];
+        item.draw();
+
+        const distToItem = Math.hypot(player.x - item.x, player.y - item.y);
+        if (distToItem < player.radius + item.radius) {
+          const pointsEarned = (item instanceof Dove) ? 10 : 5;
+          score += pointsEarned;
+          if (currentScoreEl) currentScoreEl.textContent = score;
+          playSFX('item');
+
+          items.splice(i, 1);
+
+          if (score >= WIN_SCORE) {
+            switchState(GameState.CLEAR);
+            return;
+          }
+        }
+      }
+
+      // Update & Draw Stars
+      for (let i = stars.length - 1; i >= 0; i--) {
+        const star = stars[i];
+        star.update(dt);
+        star.draw();
+
+        const distToStar = Math.hypot(player.x - star.x, player.y - star.y);
+        if (distToStar < player.radius + star.radius) {
+          player.invincibleTimer = 3;
+          playSFX('item');
+          stars.splice(i, 1);
+          continue;
+        }
+
+        if (star.lifespan <= 0) {
+          stars.splice(i, 1);
+        }
+      }
+
+      // Update & Draw Owls
+      for (let i = owls.length - 1; i >= 0; i--) {
+        const owl = owls[i];
+        owl.update(player);
+        owl.draw();
+
+        const dist = Math.hypot(player.x - owl.x, player.y - owl.y);
+        if (dist < player.radius + owl.radius) {
+          if (player.invincibleTimer > 0) {
+            // Defeat owl in invincible state
+            owls.splice(i, 1);
+            score += 1;
+            if (currentScoreEl) currentScoreEl.textContent = score;
+            playSFX('enemy');
+
+            if (score >= WIN_SCORE) {
+              switchState(GameState.CLEAR);
+              return;
+            }
+          } else {
+            // GameOver when caught
+            switchState(GameState.GAMEOVER);
+            return;
+          }
+        }
+      }
+
+      gameLoopId = requestAnimationFrame(gameLoop);
+    }
+
+    // Event Listeners
+    startBtn.addEventListener('click', () => switchState(GameState.PLAY));
+    restartBtn.addEventListener('click', () => switchState(GameState.START));
+    winRestartBtn.addEventListener('click', () => switchState(GameState.START));
+    resumeBtn.addEventListener('click', () => switchState(GameState.PLAY));
+    
+    pauseBtn.addEventListener('click', () => {
+      if (currentState === GameState.PLAY) switchState(GameState.PAUSE);
+      else if (currentState === GameState.PAUSE) switchState(GameState.PLAY);
+    });
+
+    if (mobilePauseBtn) {
+      mobilePauseBtn.addEventListener('click', () => {
+        if (currentState === GameState.PLAY) switchState(GameState.PAUSE);
+        else if (currentState === GameState.PAUSE) switchState(GameState.PLAY);
+      });
+    }
+
+    // Initialize View
+    switchState(GameState.START);
+  </script>
+</body>
+</html>
